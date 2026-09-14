@@ -1,0 +1,59 @@
+---
+title: "STA 9750 — Software Tools for Data Analysis"
+author: "Felisita Abregonde Cheung"
+---
+
+## Introduction
+
+I'm a MARKETING major paying an extra $2,000 to retake this course. Failures never daunt me. My own father has taught me to cower but never give up when he slammed my face on the ground and turn my legs gray and blue at a very young age. Today, I assist him on his oncology visits. He is dying...
+
+I was never vengeful. That is because the God I believe in died for bad people. Although, I never forget. 
+
+
+## Rosa Parks and Me
+
+Rosa Parks wrote in her autobiography, "It was unfair to segregate us. But neither the bus company nor the mayor nor the city commissioners would listen." You see it was the system, the legal LAW that separated the blacks from the white. Ms. Parks continued, "the laws of segregation on public transportation had been passed. That was back in 1900." Half a century later she describes the injustice, but by 1950s "more of us (blacks)rode buses than Caucasian did, because more whites could afford cars."  Where do colored people sit? The lawful system failed many people and it pyschologically scarred them.
+
+AI also is a system and its 'bus drivers' are the operators of the computer system. I believe that indiscriminate stamping of the word 'Fail' without due diligence is abhorrence to human justice. Without checks and balances, the system will fail humanity. 
+
+George Carlin, a prominent American comedian, once noted, "kids can't pass the test. Dont worry about that we're gonna lower the passing grade.. the IQ of the country slips another two or three points and pretty soon all you need to get into college is a f-- pencil." OBVIOUSLY, he has never used AI. Even the famous Elon Musk, known for his elaborate speeches was stumped for about 15 seconds when asked about job advise for his kids. He says, " that's a tough question".
+
+The biggest difference between the segregation law and AI is the human heart. Human laws changes according to consciousness. Even Benjamin Franklin marveled that blacks were intelligent too. Human empathic consciousness is what drives change. Without empathy, we focus on aryan racism or japan's superiority complex. 
+
+I was marked a Failure by a system, and it made me question: does this system recognize human effort and originality of my works? Could it empathize? 
+
+## Rain Fire from the Sky
+
+I am a woman of sorrow. Ive been abused, sexually abused, lost a child and losing more. Some people like Oprah, a pint of ice cream at night relieves the pain, some lose themselves in books, work or performance. My panache is learning.
+
+Failure is a trigger word for many people my age. Because when a human reaches middle age, the barometer of failure strikes again. It is a stage of reckoning, a time we ask how much we failed ourselves and the failed the roles we portray. 
+
+Sometimes I ask  for fire to rain on those that failed me. I am rebuked. The Savior of my life said, “He who has no sin, throw the first stone.”  Therefore, I don’t demand for reckoning. I demand human heart to prevail. 
+
+100 years from now, hyper - AI will fire drones to perceived threats to its system, but it can never pulverize the consciousness of love, human sorrow and empathy. The destination of a finite universe is definitive, but hope is immeasurable.
+
+Rain fire on AI system, not the bus operator.
+
+::: {.callout-note appearance="simple"}
+
+## Sources
+
+**Rosa Parks: *My Story***  
+Autobiography of Rosa Parks with Jim Haskins
+
+**George Carlin: Education**  
+[Watch on YouTube](https://youtu.be/sNXHSMmaq_s?si=uJvf462YhZwpdkDU)
+
+**Tesla CEO Elon Musk discusses the implications of A.I. on his children's future in the workforce**  
+[Watch on YouTube](https://www.youtube.com/watch?v=JJPWIiu-BUw)
+
+:::
+
+```{r}
+#| include: false
+1 + 1
+```
+
+---
+
+Last Updated: `r format(Sys.time(), "%A %m %d, %Y at %H:%M%p")`
