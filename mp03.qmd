@@ -1,7 +1,2104 @@
-
 ---
-title: "Mini-Project Placeholder"
+title: "Mini-Project 03"
+subtitle: "Where My People At?"
+author: "Felisita Abregonde Cheung"
+editor:
+  mode: source
+format:
+  html:
+    code-fold: true
+    code-summary: "Show the code"
+    toc: true
+    toc-location: right
+    toc-depth: 3
+    page-layout: article
+execute:
+  warning: false
+  message: false
 ---
 
-This is a placeholder for STA9750 Mini-Project 3. Check back soon for more!
+<style>
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  color: #2f2f2f;
+  line-height: 1.6;
+}
+
+/* Main section headings */
+h2 {
+  background-color: #dcefe1;
+  color: #244a35;
+  padding: 7px 12px;
+  border-radius: 4px;
+  margin-top: 25px;
+  font-size: 19px !important;
+  font-weight: 600;
+}
+
+/* Smaller subsection headings */
+h3 {
+  background-color: #edf7ef;
+  color: #315b40;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 17px !important;
+  font-weight: 600;
+}
+
+/* Special darker Executive Summary */
+.executive-summary {
+  background-color: #9fc5a8;
+  color: #183b27;
+  padding: 14px 18px;
+  border-radius: 5px;
+  font-size: 1.45em;
+  font-weight: 600;
+  margin-top: 25px;
+  margin-bottom: 15px;
+}
+
+/* Main project title */
+h1.title {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 28px !important;
+  font-weight: 600;
+  color: #233B5D !important;
+  letter-spacing: -0.3px;
+}
+
+/* Subtitle under main title */
+p.subtitle {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 18px !important;
+  color: #4f5f70;
+}
+
+/* Author name */
+#quarto-document-content #title-block-header
+.quarto-title-meta-contents p {
+  font-family: "Segoe Script", "Brush Script MT", cursive;
+  font-size: 18px;
+  color: red !important;
+}
+
+/* Tables */
+table {
+  font-size: 14px;
+}
+
+thead {
+  background-color: #dcefe1;
+}
+
+/* Figures */
+.quarto-figure {
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+</style>
+
+
+## Introduction
+
+Filipinos are sometimes called “the Latinos of Asia.” After more than 300 years of Spanish rule, the United States snatched up the Philippines in 1898. In less than 50 years of American rule, English had become widely used across the islands. That legacy can turn up in the middle of an ordinary American day. The nurse explaining your discharge instructions may have trained in Manila, and the person helping you reset your password may be taking your call from Cebu. [Library of Congress](https://tile.loc.gov/storage-services/service/ll/llglrdppub/2019668796/2019668796.pdf)
+
+By 1970s, many English speaking Filipino nurses were recruited by New York hospitals, and this community created Little Manila in Woodside, Queens.  As someone born in the Philippines, I see Woodside as part of a story that also runs through Hawaii’s sugar plantations and California’s farm towns. [New York City Council](https://legistar.council.nyc.gov/View.ashx?GUID=1FD967D7-D6E1-4EF9-A9F0-A06F917D928B&ID=11567044&M=F)
+
+In *Welcomed by the New Colossus: An Atlas of American Communities*, I use Census estimates to map where Filipino communities have taken root in New York and across the country. In the five boroughs, I use the city’s PLUTO property records to explore where New Yorkers live and work, and how much space they have.
+
+## Data Acquisition and Preparation
+
+
+
+## Task 1: Data Acquisition - CBSA Population Breakdown
+
+I compare the number and share of Filipino residents in U.S. metropolitan areas using Census estimates. The downloaded files are saved in `data/mp03`.
+
+### Task 1A: Acquire 2020–2024 ACS Five-Year Population Data
+
+The [published 2025 ACS one-year B02018 table](https://www2.census.gov/programs-surveys/acs/summary_file/2025/table-based-SF/data/1YRData/acsdt1y2025-b02018.dat) has no metropolitan-area rows. I use the 2020–2024 ACS five-year estimates for the metro comparison and for the city, state, and national estimates in Task 6. Here, Filipino includes residents who identified as Filipino alone or in combination.
+
+```{r}
+#| label: task1-cbsa-acquisition
+#| message: false
+#| warning: false
+
+library(tidycensus)
+library(dplyr)
+library(readr)
+
+dir.create("data/mp03", recursive = TRUE, showWarnings = FALSE)
+
+acs_year <- 2024
+acs_survey <- "acs5"
+filipino_variable <- "B02018_012"
+population_variables <- c(
+  total_population = "B01003_001",
+  filipino_population = filipino_variable
+)
+
+metro_cache_file <- "data/mp03/cbsa_filipino_msa_2024_acs5.csv"
+
+clean_metros <- function(data) {
+  data |>
+    filter(
+      grepl(" Metro Area$", NAME),
+      !grepl(", PR Metro Area$", NAME),
+      is.finite(total_populationE),
+      total_populationE > 0,
+      is.finite(filipino_populationE),
+      between(filipino_populationE, 0, total_populationE)
+    ) |>
+    transmute(
+      GEO_ID = GEOID,
+      NAME,
+      filipino_population = filipino_populationE,
+      total_population = total_populationE,
+      filipino_percentage = 100 * filipino_population / total_population
+    )
+}
+
+cbsa_raw <- if (file.exists(metro_cache_file)) {
+  read_csv(
+    metro_cache_file,
+    col_types = cols(GEOID = col_character()),
+    show_col_types = FALSE
+  )
+}
+
+required_columns <- c("GEOID", "NAME", "total_populationE", "filipino_populationE")
+if (!all(required_columns %in% names(cbsa_raw)) ||
+    nrow(clean_metros(cbsa_raw)) == 0L) {
+  cbsa_raw <- get_acs(
+    geography = "cbsa",
+    variables = population_variables,
+    year = acs_year,
+    survey = acs_survey,
+    output = "wide"
+  )
+  if (nrow(clean_metros(cbsa_raw)) == 0L) {
+    stop("The 2020–2024 ACS download returned no usable U.S. metro estimates.")
+  }
+  write_csv(cbsa_raw, metro_cache_file)
+}
+```
+
+### Task 1B: Calculate Filipino Population Percentages
+
+The Filipino population estimate is divided by the
+total population estimate to calculate the percentage
+of Filipino residents in each metropolitan area.
+
+```{r}
+#| label: task1-clean-combine
+#| message: false
+#| warning: false
+
+cbsa_population <- clean_metros(cbsa_raw)
+
+write_csv(cbsa_population, "data/mp03/cbsa_filipino_clean_2024_acs5.csv")
+
+head(cbsa_population)
+```
+
+### Task 1C: Metropolitan Areas With the Largest Filipino Populations
+
+The following table identifies the ten metropolitan
+areas with the largest estimated Filipino populations.
+
+```{r}
+#| label: task1-top-metros
+#| message: false
+#| warning: false
+
+cbsa_population |>
+  arrange(desc(filipino_population)) |>
+  slice_head(n = 10) |>
+  select(
+    Metropolitan_Area = NAME,
+    Filipino_Population = filipino_population,
+    Total_Population = total_population,
+    Filipino_Percentage = filipino_percentage
+  ) |>
+  mutate(
+    Filipino_Percentage =
+      round(Filipino_Percentage, 2)
+  ) |>
+  knitr::kable(
+    caption = "Ten Metropolitan Areas With the Largest Filipino Populations, 2020–2024 ACS five-year estimates"
+  )
+```
+
+### Task 1D: Data Interpretation
+
+The table ranks metropolitan areas by the estimated number of Filipino residents. Question 4 ranks them by share of the local population. A metro area can rank highly by share even when its Filipino population is smaller in absolute terms.
+
+## Task 2: Data Acquisition - Filipino Population Breakdown in NYC
+
+<div style="text-align: center; margin: 15px 0 25px 0;">
+  <img
+    src="https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Flag_of_the_Philippines.svg/1920px-Flag_of_the_Philippines.svg.png"
+    alt="Flag of the Philippines"
+    style="width: 220px; height: auto; border-radius: 3px;"
+  >
+</div>
+I use 2020–2024 ACS estimates and census tract boundaries to map Filipino communities across the five boroughs. Tracts show variations that a citywide average would obscure.
+
+### Task 2A: Acquire Census Tract Data
+
+```{r}
+#| label: task2-tract-acquisition
+#| message: false
+#| warning: false
+
+library(tidycensus)
+library(dplyr)
+library(sf)
+
+# Cache downloaded geographic boundary files
+options(tigris_use_cache = TRUE)
+
+# Create the data directory if needed
+dir.create(
+  "data/mp03",
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+# Save spatial data in a GeoPackage
+cache_file <- "data/mp03/nyc_tracts_2024.gpkg"
+
+# ACS variables
+acs_variables <- c(
+  total_population = "B01003_001",
+  filipino_population = "B02018_012"
+)
+
+# NYC counties (five boroughs)
+nyc_counties <- c(
+  "Bronx",
+  "Kings",
+  "New York",
+  "Queens",
+  "Richmond"
+)
+
+# Check for existing cached data
+if (file.exists(cache_file)) {
+
+  message("Loading saved NYC Census tract data.")
+
+  nyc_tracts <- sf::st_read(
+    cache_file,
+    quiet = TRUE
+  )
+
+} else {
+
+  message("Downloading ACS-5 Census tract data.")
+
+  nyc_tracts <- tidycensus::get_acs(
+    geography = "tract",
+    variables = acs_variables,
+    state = "NY",
+    county = nyc_counties,
+    year = 2024,
+    survey = "acs5",
+    geometry = TRUE,
+    output = "wide"
+  )
+
+  # Save the data and geographic boundaries
+  sf::st_write(
+    nyc_tracts,
+    cache_file,
+    delete_dsn = TRUE,
+    quiet = TRUE
+  )
+
+  message("Census tract data saved successfully.")
+}
+
+# Confirm the number of census tracts
+nrow(nyc_tracts)
+```
+
+### Task 2B: Clean and Prepare Population Data
+
+The ACS estimates are converted into numeric
+population values. The Filipino population percentage
+is calculated for each census tract.
+
+```{r}
+#| label: task2-tract-cleaning
+#| message: false
+#| warning: false
+
+nyc_tracts <- nyc_tracts |>
+  mutate(
+    total_population =
+      as.numeric(total_populationE),
+
+    filipino_population =
+      as.numeric(filipino_populationE),
+
+    filipino_percentage = if_else(
+      total_population > 0,
+      filipino_population /
+        total_population * 100,
+      NA_real_
+    )
+  )
+
+# Preview six Queens census tracts
+nyc_tracts |>
+  sf::st_drop_geometry() |>
+  dplyr::filter(startsWith(GEOID, "36081")) |>
+  dplyr::select(
+    GEOID,
+    NAME,
+    total_population,
+    filipino_population,
+    filipino_percentage
+  ) |>
+  head(6) |>
+  knitr::kable(
+    digits = 2,
+    caption = "Queens Census Tract Population Preview"
+  )
+```
+
+
+### Task 2C: Visualize Filipino Population Concentration
+
+A tract map divides the city into small areas called census tracts. This map shows where Filipino residents make up a larger share of the local population. A patch marked 30% means about 3 in 10 residents of that tract identified as Filipino, alone or in combination. The palette draws on the Philippine flag.
+
+```{r}
+#| label: task2-tract-map
+#| message: false
+#| warning: false
+#| fig-width: 10
+#| fig-height: 8
+#| fig-dpi: 160
+
+library(ggplot2)
+library(scales)
+
+# Create a map of Filipino population concentration
+ggplot(nyc_tracts) +
+
+  geom_sf(
+    aes(fill = filipino_percentage),
+    color = "white",
+    linewidth = 0.05
+  ) +
+
+  # Philippine flag-inspired color scale
+  scale_fill_gradientn(
+    colours = c(
+      "#FFFFFF",  # White: lowest concentration
+      "#FCD116",  # Yellow: lower concentration
+      "#0038A8",  # Blue: moderate concentration
+      "#CE1126"   # Red: highest concentration
+    ),
+    values = scales::rescale(
+      c(0, 2, 10, 30)
+    ),
+    limits = c(0, 30),
+    oob = scales::squish,
+    na.value = "#E5E5E5",
+    name = "Filipino (%)"
+  ) +
+
+  labs(
+    title = "Mapping Filipino Communities in New York City",
+    subtitle = paste(
+      "Filipino share of census tract population",
+      "2020–2024 ACS five-year estimates"
+    ),
+    caption = paste(
+      "Source: U.S. Census Bureau,",
+      "2024 American Community Survey Five-Year Estimates"
+    )
+  ) +
+
+  coord_sf(datum = NA) +
+
+  theme_void(base_size = 12) +
+
+  theme(
+    plot.title = element_text(
+      color = "#0038A8",
+      size = 17,
+      face = "bold"
+    ),
+
+    plot.subtitle = element_text(
+      color = "#555555",
+      size = 11
+    ),
+
+    plot.caption = element_text(
+      color = "#666666",
+      size = 9
+    ),
+
+    legend.position = "right",
+
+    legend.title = element_text(
+      size = 11,
+      face = "bold"
+    ),
+
+    legend.text = element_text(
+      size = 10
+    ),
+
+    plot.background = element_rect(
+      fill = "white",
+      color = NA
+    )
+  )
+```
+
+
+
+### Task 2D: Initial Interpretation
+
+Read the colors against the legend. Gray marks tracts without a usable estimate. A tract can have a high Filipino share even if it has relatively few Filipino residents.
+
+## Task 3: Data Acquisition - NYC Neighborhood Tabulation Areas
+
+### Task 3A: Download and Load NYC NTA Boundaries
+
+I use the city’s 2020 Neighborhood Tabulation Areas (NTAs) to summarize census tract estimates at a neighborhood scale.
+
+```{r}
+#| label: task3-load-nta
+#| message: false
+#| warning: false
+
+library(sf)
+library(dplyr)
+
+load_nyc_nta <- function() {
+
+  data_dir <- "data/mp03"
+  dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+
+  zip_file <- file.path(data_dir, "nynta2020.zip")
+  extract_dir <- file.path(data_dir, "nynta2020")
+  geojson_file <- file.path(data_dir, "nynta2020.geojson")
+
+  # First, reuse the existing ZIP file when available
+  if (file.exists(zip_file)) {
+
+    dir.create(extract_dir, recursive = TRUE,
+               showWarnings = FALSE)
+
+    shp_files <- list.files(
+      extract_dir,
+      pattern = "\\.shp$",
+      recursive = TRUE,
+      full.names = TRUE
+    )
+
+    if (length(shp_files) == 0) {
+      unzip(zip_file, exdir = extract_dir)
+
+      shp_files <- list.files(
+        extract_dir,
+        pattern = "\\.shp$",
+        recursive = TRUE,
+        full.names = TRUE
+      )
+    }
+
+    if (length(shp_files) == 0) {
+      stop("No shapefile found in the NTA ZIP.")
+    }
+
+    nta <- st_read(shp_files[1], quiet = TRUE)
+
+  } else {
+
+    # Automatically download official NYC Open Data
+    # GeoJSON when the local shapefile is missing
+    nta_url <- paste0(
+      "https://data.cityofnewyork.us/api/v3/views/",
+      "9nt8-h7nd/query.geojson?accessType=DOWNLOAD"
+    )
+
+    if (!file.exists(geojson_file)) {
+      download.file(
+        nta_url,
+        destfile = geojson_file,
+        mode = "wb"
+      )
+    }
+
+    nta <- st_read(geojson_file, quiet = TRUE)
+  }
+
+  # Standardize column names
+  names(nta) <- tolower(names(nta))
+
+  # Keep the fields needed for our analysis
+  nta <- nta |>
+    select(
+      nta2020,
+      ntaname,
+      boroname,
+      ntatype,
+      geometry
+    )
+
+  return(nta)
+}
+
+nyc_nta <- load_nyc_nta()
+
+cat("NYC NTAs loaded:", nrow(nyc_nta), "\n")
+cat("Coordinate system:", st_crs(nyc_nta)$epsg, "\n")
+```
+
+
+### Task 3B: Aggregating Census Tract Data to NYC Neighborhoods
+
+I assign each census tract to the NTA it overlaps most, then add up the estimates for the assigned tracts. A tract that crosses an NTA boundary is counted in a single neighborhood.
+
+```{r}
+#| label: task3-spatial-join
+#| message: false
+#| warning: false
+
+library(sf)
+library(dplyr)
+
+# Ensure both datasets use the same coordinate system
+nyc_nta <- st_transform(
+  nyc_nta,
+  st_crs(nyc_tracts)
+)
+
+# Assign each census tract to its largest-overlap NTA
+tract_nta <- st_join(
+  nyc_tracts |>
+    select(
+      GEOID,
+      total_population,
+      filipino_population
+    ),
+  nyc_nta |>
+    select(nta2020),
+  largest = TRUE,
+  left = TRUE
+)
+
+# Aggregate population estimates by NTA
+nta_totals <- tract_nta |>
+  st_drop_geometry() |>
+  filter(!is.na(nta2020)) |>
+  group_by(nta2020) |>
+  summarise(
+    total_population = sum(
+      total_population,
+      na.rm = TRUE
+    ),
+    filipino_population = sum(filipino_population),
+    tract_count = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    filipino_percentage = if_else(
+      total_population > 0,
+      100 * filipino_population / total_population,
+      NA_real_
+    )
+  )
+
+# Reconnect neighborhood boundaries
+nta_filipino <- nyc_nta |>
+  left_join(
+    nta_totals,
+    by = "nta2020"
+  )
+
+# Display the top 10 neighborhoods
+nta_filipino |>
+  st_drop_geometry() |>
+  filter(!is.na(filipino_population)) |>
+  arrange(desc(filipino_population)) |>
+  select(
+    ntaname,
+    boroname,
+    filipino_population,
+    total_population,
+    filipino_percentage
+  ) |>
+  head(10) |>
+  knitr::kable(
+    digits = 2,
+    caption = "Top 10 NYC Neighborhoods by Filipino Population"
+  )
+```
+
+### Task 3C: Validate Neighborhood Population Estimates
+
+I compare the tract counts before and after the geographic match and count how many tracts were left unmatched.
+
+```{r}
+#| label: task3-validation
+#| message: false
+#| warning: false
+
+cat(
+  "Original census tracts:",
+  nrow(nyc_tracts), "\n"
+)
+
+cat(
+  "Tracts after spatial join:",
+  nrow(tract_nta), "\n"
+)
+
+cat(
+  "Unique census tracts:",
+  n_distinct(tract_nta$GEOID), "\n"
+)
+
+cat(
+  "Tracts without an NTA:",
+  sum(is.na(tract_nta$nta2020)), "\n"
+)
+
+cat(
+  "NTAs with population estimates:",
+  sum(!is.na(nta_filipino$total_population)),
+  "\n"
+)
+```
+### Initial Findings: Filipino Communities in NYC
+
+The table above shows which NTAs have the largest estimated Filipino populations. Counts and population shares describe different aspects of settlement. The tract-to-NTA assignment uses largest overlap, so the neighborhood estimates are approximate.
+
+### Initial Findings: Filipino Communities in NYC
+
+The table shows the neighborhoods with the highest estimated Filipino share of their population. The counts alongside each percentage show how many residents the estimate represents.
+
+```{r}
+#| label: task3-top-filipino-share
+
+nta_filipino |>
+  sf::st_drop_geometry() |>
+  dplyr::filter(
+    is.finite(filipino_percentage),
+    total_population > 0
+  ) |>
+  dplyr::arrange(dplyr::desc(filipino_percentage), ntaname) |>
+  dplyr::slice_head(n = 10) |>
+  dplyr::select(
+    Neighborhood = ntaname,
+    Borough = boroname,
+    `Estimated Filipino Residents` = filipino_population,
+    `Estimated Total Residents` = total_population,
+    `Filipino Share (%)` = filipino_percentage
+  ) |>
+  knitr::kable(
+    digits = 2,
+    caption = "NYC Neighborhoods With the Highest Estimated Filipino Population Shares"
+  )
+```
+
+## Task 4: Aggregate Tract Data to the NTA Level
+
+### Task 4A: Reconnect Population Estimates to NTA Geometry
+
+I attach the population estimates to the neighborhood boundaries for mapping. An NTA’s Filipino estimate remains missing if any assigned tract lacks that estimate.
+
+```{r}
+#| label: task4-save-nta
+#| message: false
+#| warning: false
+
+library(sf)
+library(dplyr)
+
+# Confirm the neighborhood dataset contains geometry
+stopifnot(inherits(nta_filipino, "sf"))
+
+# Save the combined geographic dataset
+st_write(
+  nta_filipino,
+  "data/mp03/nyc_nta_filipino_2024.gpkg",
+  delete_dsn = TRUE,
+  quiet = TRUE
+)
+
+# Preview Queens neighborhoods by estimated Filipino population
+nta_filipino |>
+  sf::st_drop_geometry() |>
+  dplyr::filter(boroname == "Queens", !is.na(filipino_population)) |>
+  dplyr::arrange(dplyr::desc(filipino_population), ntaname) |>
+  dplyr::select(
+    ntaname,
+    boroname,
+    total_population,
+    filipino_population,
+    filipino_percentage
+  ) |>
+  head(10) |>
+  knitr::kable(
+    digits = 2,
+    caption = "Queens Neighborhoods With the Largest Estimated Filipino Populations"
+  )
+```
+
+
+### Task 4B: NYC PLUTO Data Acquisition Using the Open Data API
+
+The city’s Primary Land Use Tax Lot Output (PLUTO) records describe individual tax lots. I downloaded the first 100,000 records in batches of 10,000 and the rest in batches of 500. The code saves each batch locally and retries temporary failures.
+
+```{r}
+#| label: task4-pluto-acquisition
+#| message: false
+#| warning: false
+
+library(httr2)
+library(readr)
+
+pluto_dir <- "data/mp03/pluto_batches"
+dir.create(pluto_dir, recursive = TRUE, showWarnings = FALSE)
+
+base_url <- "https://data.cityofnewyork.us/resource/64uk-42ks.csv"
+
+
+total_records <- 858284
+
+cat("Current PLUTO API records:", total_records, "\n")
+
+# Reproduce the original download strategy:
+# 10,000-row batches for the first 100,000 records,
+# then 500-row batches for the remaining records.
+
+download_pluto_batch <- function(offset, batch_size, filename) {
+
+  expected_rows <- min(batch_size, total_records - offset)
+
+  # Reuse a complete locally cached batch
+  if (file.exists(filename)) {
+    cached_rows <- tryCatch(
+      nrow(read_csv(
+        filename,
+        col_types = cols(.default = col_character()),
+        show_col_types = FALSE,
+        progress = FALSE
+      )),
+      error = function(e) NA_integer_
+    )
+
+    if (!is.na(cached_rows) &&
+        cached_rows == expected_rows) {
+      return(invisible(filename))
+    }
+  }
+
+  success <- FALSE
+
+  for (attempt in 1:5) {
+
+    tryCatch({
+
+      response <- request(base_url) |>
+        req_url_query(
+          `$limit` = batch_size,
+          `$offset` = offset,
+          `$order` = ":id"
+        ) |>
+        req_timeout(120) |>
+        req_perform()
+
+      temporary_file <- paste0(filename, ".tmp")
+
+      writeBin(
+        resp_body_raw(response),
+        temporary_file
+      )
+
+      downloaded_rows <- nrow(read_csv(
+        temporary_file,
+        col_types = cols(.default = col_character()),
+        show_col_types = FALSE,
+        progress = FALSE
+      ))
+
+      if (downloaded_rows != expected_rows) {
+        stop("Incomplete batch")
+      }
+
+      if (file.exists(filename)) {
+        file.remove(filename)
+      }
+
+      if (!file.rename(temporary_file, filename)) {
+        stop("Could not save batch")
+      }
+
+      success <- TRUE
+
+    }, error = function(e) {
+      cat(
+        "Offset", offset,
+        "attempt", attempt,
+        "failed:", conditionMessage(e), "\n"
+      )
+    })
+
+    if (success) break
+
+    Sys.sleep(5 * attempt)
+  }
+
+  if (!success) {
+    stop(
+      "Download interrupted at offset ", offset,
+      ". Run again to resume."
+    )
+  }
+
+  cat("Downloaded offset:", offset, "\n")
+
+  Sys.sleep(0.5)
+
+  invisible(filename)
+}
+
+# First 100,000 records: batches of 10,000
+large_offsets <- seq(0, 90000, by = 10000)
+
+for (offset in large_offsets) {
+
+  filename <- file.path(
+    pluto_dir,
+    sprintf("pluto_batch_%04d.csv", offset / 10000 + 1)
+  )
+
+  download_pluto_batch(offset, 10000, filename)
+}
+
+# Remaining records: batches of 500
+small_offsets <- seq(
+  100000,
+  total_records - 1,
+  by = 500
+)
+
+for (offset in small_offsets) {
+
+  filename <- file.path(
+    pluto_dir,
+    sprintf("pluto_small_offset_%09d.csv", offset)
+  )
+
+  download_pluto_batch(offset, 500, filename)
+}
+
+# Provide the file list for Task 4C
+original_files <- file.path(
+  pluto_dir,
+  sprintf("pluto_batch_%04d.csv", 1:10)
+)
+
+small_files <- file.path(
+  pluto_dir,
+  sprintf("pluto_small_offset_%09d.csv", small_offsets)
+)
+
+all_files <- c(original_files, small_files)
+
+cat("Cached PLUTO batches:", length(all_files), "\n")
+cat("Expected records:", total_records, "\n")
+```
+
+
+### Task 4C: Combine and Validate NYC PLUTO Data
+
+After downloading the PLUTO records, I combined the
+cached CSV batches into one dataset.
+
+I then checked the total number of observations,
+the number of variables, and duplicate or missing
+property identifiers.
+
+```{r}
+#| label: task4-pluto-combine
+#| message: false
+#| warning: false
+
+library(readr)
+library(dplyr)
+library(purrr)
+
+pluto_data <- purrr::map_dfr(
+  all_files,
+  ~ read_csv(
+    .x,
+    show_col_types = FALSE,
+    col_types = cols(.default = col_character()),
+    progress = FALSE
+  )
+)
+
+cat(
+  "Total PLUTO records:",
+  format(nrow(pluto_data), big.mark = ","),
+  "\n"
+)
+
+cat(
+  "Total variables:",
+  ncol(pluto_data),
+  "\n"
+)
+
+stopifnot(nrow(pluto_data) == 858284)
+
+if ("bbl" %in% names(pluto_data)) {
+
+  cat(
+    "Duplicate BBL values:",
+    sum(duplicated(pluto_data$bbl)),
+    "\n"
+  )
+
+  cat(
+    "Missing BBL values:",
+    sum(is.na(pluto_data$bbl) |
+        pluto_data$bbl == ""),
+    "\n"
+  )
+}
+
+saveRDS(
+  pluto_data,
+  "data/mp03/pluto_combined.rds"
+)
+
+cat("Combined PLUTO dataset saved successfully.\n")
+```
+
+
+## Task 5: Download PLUTO
+
+A reusable function loads the combined PLUTO file when it is available. Otherwise, it assembles the saved batches, downloads any missing ones and writes the combined CSV.
+
+```{r}
+#| label: task5-download-pluto
+#| message: false
+#| warning: false
+
+library(httr2)
+library(readr)
+library(dplyr)
+
+download_pluto <- function(
+  output_file = "data/mp03/pluto_complete.csv",
+  batch_dir = "data/mp03/pluto_batches",
+  total_records = 858284
+) {
+
+  dir.create(dirname(output_file),
+             recursive = TRUE, showWarnings = FALSE)
+  dir.create(batch_dir,
+             recursive = TRUE, showWarnings = FALSE)
+
+  # 1. Use the combined CSV if already available
+  if (file.exists(output_file)) {
+    cat("Using cached PLUTO CSV.\n")
+
+    return(readr::read_csv(
+      output_file,
+      col_types = readr::cols(.default = "c"),
+      show_col_types = FALSE
+    ))
+  }
+
+  base_url <- paste0(
+    "https://data.cityofnewyork.us/resource/",
+    "64uk-42ks.csv"
+  )
+
+  # 2. Reuse the previously downloaded 10,000-row batches
+  # and 500-row batches. Download only missing batches.
+
+  large_offsets <- seq(0, 90000, by = 10000)
+
+  small_offsets <- seq(
+    100000,
+    total_records - 1,
+    by = 500
+  )
+
+  batch_plan <- data.frame(
+    offset = c(large_offsets, small_offsets),
+    limit = c(
+      rep(10000, length(large_offsets)),
+      rep(500, length(small_offsets))
+    )
+  )
+
+  batch_plan$file <- c(
+    file.path(
+      batch_dir,
+      sprintf("pluto_batch_%04d.csv", 1:10)
+    ),
+    file.path(
+      batch_dir,
+      sprintf(
+        "pluto_small_offset_%09d.csv",
+        small_offsets
+      )
+    )
+  )
+
+  batch_data <- vector(
+    "list",
+    nrow(batch_plan)
+  )
+
+  for (i in seq_len(nrow(batch_plan))) {
+
+    offset <- batch_plan$offset[i]
+    limit <- batch_plan$limit[i]
+    filename <- batch_plan$file[i]
+
+    expected_rows <- min(
+      limit,
+      total_records - offset
+    )
+
+    # Try the local batch first
+    data <- NULL
+
+    if (file.exists(filename)) {
+      data <- tryCatch(
+        readr::read_csv(
+          filename,
+          col_types = readr::cols(.default = "c"),
+          show_col_types = FALSE,
+          progress = FALSE
+        ),
+        error = function(e) NULL
+      )
+
+      if (!is.null(data) &&
+          nrow(data) != expected_rows) {
+        data <- NULL
+      }
+    }
+
+    # Download only if the cached batch is unavailable
+    if (is.null(data)) {
+
+      success <- FALSE
+
+      for (attempt in 1:5) {
+
+        tryCatch({
+
+          response <- httr2::request(base_url) |>
+            httr2::req_url_query(
+              `$limit` = limit,
+              `$offset` = offset,
+              `$order` = ":id"
+            ) |>
+            httr2::req_timeout(120) |>
+            httr2::req_perform()
+
+          temp_file <- paste0(filename, ".tmp")
+
+          writeBin(
+            httr2::resp_body_raw(response),
+            temp_file
+          )
+
+          data <- readr::read_csv(
+            temp_file,
+            col_types = readr::cols(.default = "c"),
+            show_col_types = FALSE,
+            progress = FALSE
+          )
+
+          if (nrow(data) != expected_rows) {
+            stop("Incomplete API response.")
+          }
+
+          if (file.exists(filename)) {
+            file.remove(filename)
+          }
+
+          if (!file.rename(temp_file, filename)) {
+            stop("Unable to save downloaded batch.")
+          }
+
+          success <- TRUE
+
+        }, error = function(e) {
+
+          cat(
+            "Attempt", attempt,
+            "failed at offset", offset,
+            ":", conditionMessage(e), "\n"
+          )
+
+        })
+
+        if (success) break
+
+        Sys.sleep(5 * attempt)
+      }
+
+      if (!success) {
+        stop(
+          "Download stopped at offset ", offset,
+          ". Cached batches are preserved."
+        )
+      }
+
+      Sys.sleep(0.5)
+    }
+
+    batch_data[[i]] <- data
+  }
+
+  # 3. Combine all batches using bind_rows()
+  pluto <- dplyr::bind_rows(batch_data)
+
+  if (nrow(pluto) != total_records) {
+    stop("Combined PLUTO row count is incorrect.")
+  }
+
+  # Validate property identifiers
+  if ("bbl" %in% names(pluto)) {
+    if (anyNA(pluto$bbl) ||
+        any(pluto$bbl == "") ||
+        anyDuplicated(pluto$bbl) > 0) {
+      stop("Missing or duplicate BBL identifiers.")
+    }
+  }
+
+  # 4. Save as CSV
+  readr::write_csv(pluto, output_file)
+
+  cat("PLUTO CSV saved:", output_file, "\n")
+
+  return(pluto)
+}
+
+# Run the function
+pluto <- download_pluto()
+
+cat(
+  "PLUTO records:",
+  format(nrow(pluto), big.mark = ","),
+  "\n"
+)
+
+cat("PLUTO variables:", ncol(pluto), "\n")
+```
+
+
+
+## Task 6: Exploratory Data Analysis
+
+### Mapping New York: Where People Live, Work and Build
+
+A neighborhood takes shape around the places people live and the places they go to work. Here I bring Census population estimates and PLUTO property records together to see how housing, offices and residents are distributed across New York City.
+
+```{r}
+#| label: task6-setup
+#| include: false
+
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(sf)
+library(tidyr)
+library(tidycensus)
+library(knitr)
+library(scales)
+library(stringr)
+
+# Reuse the combined PLUTO CSV from Task 5
+pluto_eda <- read_csv(
+  "data/mp03/pluto_complete.csv",
+  col_types = cols(.default = col_character()),
+  show_col_types = FALSE
+)
+
+# Convert PLUTO numerical variables safely
+numeric_fields <- c(
+  "officearea", "unitsres", "resarea",
+  "numfloors", "comarea"
+)
+
+for (field in intersect(numeric_fields, names(pluto_eda))) {
+  pluto_eda[[field]] <- suppressWarnings(
+    as.numeric(pluto_eda[[field]])
+  )
+}
+
+# Standardize borough + census tract identifiers
+# BCT2020 is the borough code followed by six tract digits.
+borough_county <- c(
+  "1" = "061",  # Manhattan
+  "2" = "005",  # Bronx
+  "3" = "047",  # Brooklyn
+  "4" = "081",  # Queens
+  "5" = "085"   # Staten Island
+)
+
+pluto_eda <- pluto_eda |>
+  mutate(
+    bct2020 = str_pad(bct2020, 7, pad = "0"),
+    borough_code = substr(bct2020, 1, 1),
+    county_code = unname(
+      borough_county[borough_code]
+    ),
+    tract_geoid = if_else(
+      !is.na(county_code) &
+        str_detect(bct2020, "^[1-5][0-9]{6}$"),
+      paste0("36", county_code,
+             substr(bct2020, 2, 7)),
+      NA_character_
+    )
+  )
+
+# Prepare the tract population data
+tract_population <- nyc_tracts |>
+  st_drop_geometry() |>
+  transmute(
+    GEOID = as.character(GEOID),
+    total_population = as.numeric(total_population),
+    filipino_population = as.numeric(filipino_population)
+  )
+
+# Create a tract-to-NTA crosswalk using largest overlap.
+# This follows the approximation used in Task 3.
+tract_nta_crosswalk <- st_join(
+  nyc_tracts |> select(GEOID),
+  st_transform(
+    nyc_nta |> select(nta2020, ntaname, boroname),
+    st_crs(nyc_tracts)
+  ),
+  join = st_intersects,
+  largest = TRUE,
+  left = TRUE
+) |>
+  st_drop_geometry() |>
+  distinct(GEOID, .keep_all = TRUE)
+
+# Aggregate property data by census tract
+pluto_tract <- pluto_eda |>
+  filter(!is.na(tract_geoid)) |>
+  group_by(tract_geoid) |>
+  summarise(
+    office_sqft = sum(coalesce(officearea, 0)),
+    residential_sqft = sum(coalesce(resarea, 0)),
+    residential_units = sum(coalesce(unitsres, 0)),
+    commercial_sqft = sum(coalesce(comarea, 0)),
+    max_floors = suppressWarnings(
+      max(numfloors, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  ) |>
+  mutate(
+    max_floors = if_else(
+      is.infinite(max_floors), NA_real_, max_floors
+    )
+  )
+
+# Combine Census and PLUTO tract data
+tract_analysis <- tract_population |>
+  left_join(
+    pluto_tract,
+    by = c("GEOID" = "tract_geoid")
+  ) |>
+  left_join(
+    tract_nta_crosswalk |>
+      select(GEOID, nta2020, ntaname, boroname),
+    by = "GEOID"
+  )
+
+# Formatting helper
+fmt <- function(x, digits = 0) {
+  format(
+    round(x, digits),
+    big.mark = ",",
+    scientific = FALSE,
+    trim = TRUE
+  )
+}
+```
+
+### Question 1: Where Is New York City's Office Space Most Concentrated?
+
+I added up the office floor area reported in PLUTO for each 2020 census tract. The calculation treats missing office-area values as zero.
+
+```{r}
+#| label: task6-q1
+#| message: false
+#| warning: false
+
+office_ranking <- pluto_eda |>
+  filter(!is.na(tract_geoid)) |>
+  group_by(bct2020, tract_geoid) |>
+  summarise(
+    office_sqft = sum(coalesce(officearea, 0)),
+    .groups = "drop"
+  ) |>
+  arrange(desc(office_sqft))
+
+office_ranking |>
+  slice_head(n = 5) |>
+  mutate(office_sqft = comma(office_sqft)) |>
+  kable(
+    col.names = c(
+      "Borough-Census Tract",
+      "Census GEOID",
+      "Office Area (sq. ft.)"
+    ),
+    caption = "Five NYC Tracts With the Most Office Space"
+  )
+```
+
+The census tract with the greatest amount of office floor space
+is **`r office_ranking$bct2020[1]`**, with approximately
+**`r comma(office_ranking$office_sqft[1])` square feet**.
+
+
+
+### Question 2: Which Neighborhood Has the Most Residential Units?
+
+I added up the residential units reported in PLUTO, assigning each property to a neighborhood through its census tract.
+
+```{r}
+#| label: task6-q2
+#| message: false
+#| warning: false
+
+nta_housing <- tract_analysis |>
+  filter(!is.na(nta2020)) |>
+  group_by(nta2020, ntaname, boroname) |>
+  summarise(
+    residential_units = sum(
+      coalesce(residential_units, 0)
+    ),
+    .groups = "drop"
+  ) |>
+  arrange(desc(residential_units))
+
+nta_housing |>
+  slice_head(n = 10) |>
+  mutate(
+    residential_units = comma(residential_units)
+  ) |>
+  kable(
+    col.names = c(
+      "NTA Code", "Neighborhood",
+      "Borough", "Residential Units"
+    ),
+    caption = "NYC Neighborhoods With the Most Residential Units"
+  )
+```
+
+The neighborhood with the largest estimated number of
+residential units is **`r nta_housing$ntaname[1]`** in
+**`r nta_housing$boroname[1]`**, with approximately
+**`r comma(nta_housing$residential_units[1])` units**.
+
+Because properties are assigned through census tract
+boundaries, these neighborhood totals are approximations
+rather than exact property-level NTA counts.
+
+### Question 3: Which Census Tracts Have the Most Residents Relative to Residential Space?
+
+I compare household residents per 1,000 square feet of PLUTO residential floor area and per occupied housing unit in the 2020–2024 ACS. Both measures require a positive household population and a usable denominator. The Sunset Park (West) tract `36047001801` drops out because all 1,588 estimated residents live in group quarters, a Census category for shared living arrangements such as dormitories and nursing homes.
+
+```{r}
+#| label: task6-q3
+#| message: false
+#| warning: false
+
+tract_housing_acs <- tidycensus::get_acs(
+  geography = "tract",
+  state = "NY",
+  county = c("Bronx", "Kings", "New York", "Queens", "Richmond"),
+  variables = c(
+    acs_total = "B01003_001",
+    group_quarters = "B26001_001",
+    occupied_units = "B25002_002"
+  ),
+  year = 2024,
+  survey = "acs5",
+  output = "wide"
+) |>
+  dplyr::transmute(
+    GEOID,
+    household_population = acs_totalE - group_quartersE,
+    occupied_units = occupied_unitsE
+  )
+
+housing_density <- tract_analysis |>
+  dplyr::select(GEOID, ntaname, residential_sqft) |>
+  dplyr::left_join(tract_housing_acs, by = "GEOID") |>
+  dplyr::filter(
+    is.finite(household_population),
+    household_population > 0
+  )
+
+top_sqft <- housing_density |>
+  dplyr::filter(is.finite(residential_sqft), residential_sqft > 0) |>
+  dplyr::mutate(
+    residents_per_1000_sqft = 1000 * household_population / residential_sqft
+  ) |>
+  dplyr::arrange(dplyr::desc(residents_per_1000_sqft), GEOID) |>
+  dplyr::slice_head(n = 5)
+
+top_units <- housing_density |>
+  dplyr::filter(is.finite(occupied_units), occupied_units > 0) |>
+  dplyr::mutate(
+    residents_per_unit = household_population / occupied_units
+  ) |>
+  dplyr::arrange(dplyr::desc(residents_per_unit), GEOID) |>
+  dplyr::slice_head(n = 5)
+
+top_sqft |>
+  dplyr::transmute(
+    `Census Tract` = GEOID,
+    Neighborhood = ntaname,
+    `Household Residents` = scales::comma(household_population),
+    `Residential Floor Area (sq. ft.)` = scales::comma(residential_sqft),
+    `Residents per 1,000 sq. ft.` = round(residents_per_1000_sqft, 2)
+  ) |>
+  knitr::kable(
+    caption = "Five Census Tracts With the Most Household Residents per 1,000 Square Feet"
+  )
+```
+
+```{r}
+#| label: task6-q3-occupied-units
+#| message: false
+#| warning: false
+
+top_units |>
+  dplyr::transmute(
+    `Census Tract` = GEOID,
+    Neighborhood = ntaname,
+    `Household Residents` = scales::comma(household_population),
+    `Occupied Housing Units` = scales::comma(occupied_units),
+    `Residents per Occupied Unit` = round(residents_per_unit, 2)
+  ) |>
+  knitr::kable(
+    caption = "Five Census Tracts With the Most Household Residents per Occupied Housing Unit"
+  )
+```
+
+A tract in Bedford–Stuyvesant (West) averaged 6.24 residents per occupied housing unit, the highest in the analysis. Pelham Bay Park and Snug Harbor led the floor-area ranking, but their unusually low totals in city property records make those results hard to interpret.
+
+### Question 4: Where Are Filipino Americans Most Concentrated Outside the New York Metro Area?
+
+I ranked U.S. metros by the estimated percentage of residents who identified as Filipino, alone or in combination. The New York–Newark–Jersey City metro is excluded from this comparison.
+
+```{r}
+#| label: task6-q4
+#| message: false
+#| warning: false
+
+metro_data <- cbsa_population |>
+  rename(name = NAME, geoid = GEO_ID)
+
+metro_ranked <- metro_data |>
+  filter(geoid != "35620") |>
+  arrange(desc(filipino_percentage), name)
+
+top_five_metros <- metro_ranked |>
+  slice_head(n = 5)
+
+if (nrow(top_five_metros) < 5L) {
+  stop("Fewer than five usable metro estimates were available outside the New York metro area.")
+}
+
+top_five_metros |>
+  select(
+    name, filipino_population,
+    total_population, filipino_percentage
+  ) |>
+  mutate(
+    filipino_population = comma(filipino_population),
+    total_population = comma(total_population),
+    filipino_percentage =
+      round(filipino_percentage, 2)
+  ) |>
+  kable(
+    col.names = c(
+      "Metropolitan Area",
+      "Filipino Population",
+      "Total Population",
+      "Filipino Share (%)"
+    ),
+    caption = "Five Non-NYC Metro Areas With the Highest Filipino Share"
+  )
+
+ggplot(
+  top_five_metros,
+  aes(
+    x = reorder(name, filipino_percentage),
+    y = filipino_percentage
+  )
+) +
+  geom_col(fill = "#174A8B") +
+  coord_flip() +
+  labs(
+    title = "Filipino Communities Beyond New York",
+    subtitle = "Five metropolitan areas with the highest Filipino population share",
+    x = NULL,
+    y = "Filipino share of population (%)",
+    caption = "Source: U.S. Census Bureau, 2020–2024 ACS five-year estimates"
+  ) +
+  theme_minimal(base_size = 11)
+```
+
+Among the metropolitan areas outside New York,
+**`r top_five_metros$name[1]`** has the highest
+estimated Filipino population share, at
+**`r round(top_five_metros$filipino_percentage[1], 2)`%**.
+
+
+
+### Question 5: A Closer Look at Filipino Identity in One Community
+
+I use the 2020–2024 ACS to look at a Census place within one of the five metros in Question 4. Each percentage is a share of that place’s total population.
+
+```{r}
+#| label: task6-q5
+#| message: false
+#| warning: false
+
+# Match a major city to one of the leading metro areas
+city_choices <- tibble::tribble(
+  ~pattern, ~city, ~state,
+  "Urban Honolulu", "Urban Honolulu", "HI",
+  "Kahului", "Kahului", "HI",
+  "Hilo", "Hilo", "HI",
+  "San Francisco", "San Francisco", "CA",
+  "San Jose", "San Jose", "CA",
+  "Los Angeles", "Los Angeles", "CA",
+  "San Diego", "San Diego", "CA",
+  "Las Vegas", "Las Vegas", "NV",
+  "Seattle", "Seattle", "WA",
+  "Sacramento", "Sacramento", "CA",
+  "Vallejo", "Vallejo", "CA",
+  "Virginia Beach", "Virginia Beach", "VA"
+)
+
+city_matches <- lapply(top_five_metros$name, function(metro_name) {
+  city_choices |>
+    filter(str_detect(metro_name, fixed(pattern, ignore_case = TRUE))) |>
+    slice_head(n = 1)
+})
+selected_city <- bind_rows(city_matches) |> slice_head(n = 1)
+
+if (nrow(selected_city) == 0) {
+  stop(
+    "No city matched the top five metros. ",
+    "Select a city from Question 4 and update city_choices."
+  )
+}
+
+city_acs <- get_acs(
+  geography = "place",
+  state = selected_city$state[1],
+  variables = c(
+    total = "B01003_001",
+    white = "B02001_002",
+    black = "B02001_003",
+    asian = "B02001_005",
+    filipino = filipino_variable
+  ),
+  year = 2024,
+  survey = "acs5",
+  output = "wide",
+  cache_table = TRUE
+)
+
+place_label <- if (selected_city$state == "HI") " CDP," else " city,"
+city_row <- city_acs |>
+  filter(startsWith(NAME, paste0(selected_city$city, place_label)))
+
+if (nrow(city_row) != 1L || !is.finite(city_row$totalE) ||
+    city_row$totalE <= 0 || !is.finite(city_row$filipinoE)) {
+  stop("Expected one ACS place with valid population estimates for ", selected_city$city, ".")
+}
+
+city_comparison <- tibble::tibble(
+  category = c(
+    "White alone",
+    "Black alone",
+    "Asian alone",
+    "Filipino alone or in combination"
+  ),
+  population = c(
+    city_row$whiteE,
+    city_row$blackE,
+    city_row$asianE,
+    city_row$filipinoE
+  )
+) |>
+  mutate(
+    percentage = 100 * population / city_row$totalE
+  )
+
+city_comparison |>
+  mutate(
+    population = comma(population),
+    percentage = round(percentage, 2)
+  ) |>
+  kable(
+    col.names = c(
+      "Population Category",
+      "Estimated Residents",
+      "Share of Census Place (%)"
+    ),
+    caption = paste(
+      "Selected Population Groups in",
+      city_row$NAME[1]
+    )
+  )
+```
+
+The selected Census place is **`r city_row$NAME[1]`**.
+
+The Filipino alone-or-in-combination category overlaps with the race-alone categories. Each row uses the total population of the Census place as its denominator. The percentages describe individual groups and should be read separately.
+
+### Question 6: What Share of Filipino Americans Live in New York State and Major U.S. Metros?
+
+Here I divide the estimate for New York State and the estimate for each metro by the nationwide Filipino population estimate. All figures come from the 2020–2024 ACS.
+
+```{r}
+#| label: task6-q6
+#| message: false
+#| warning: false
+
+national_filipino <- get_acs(
+  geography = "us",
+  variables = filipino_variable,
+  year = acs_year,
+  survey = acs_survey,
+  cache_table = TRUE
+)
+
+ny_filipino <- get_acs(
+  geography = "state",
+  state = "NY",
+  variables = filipino_variable,
+  year = acs_year,
+  survey = acs_survey,
+  cache_table = TRUE
+)
+
+us_total <- national_filipino$estimate[1]
+ny_total <- ny_filipino$estimate[1]
+
+if (!is.finite(us_total) || us_total <= 0 ||
+    !is.finite(ny_total) || ny_total < 0 || ny_total > us_total) {
+  stop("The ACS returned an invalid U.S. or New York State Filipino estimate.")
+}
+ny_share <- 100 * ny_total / us_total
+
+major_metros <- metro_data |>
+  mutate(
+    filipino_population = as.numeric(filipino_population),
+    us_share = 100 * filipino_population / us_total
+  ) |>
+  arrange(desc(filipino_population)) |>
+  slice_head(n = 10)
+
+major_metros |>
+  select(name, filipino_population, us_share) |>
+  mutate(
+    filipino_population = comma(filipino_population),
+    us_share = round(us_share, 2)
+  ) |>
+  kable(
+    col.names = c(
+      "Metropolitan Area",
+      "Filipino Population",
+      "Share of U.S. Filipinos (%)"
+    ),
+    caption = "Filipino Americans in Major U.S. Metropolitan Areas"
+  )
+```
+
+The estimated Filipino population of the United States is
+**`r comma(us_total)`**.
+
+Of these residents, approximately
+**`r round(ny_share, 2)`%** live in New York State.
+
+The table shows how major metropolitan areas contribute to
+the nationwide Filipino population.
+
+New York State and metropolitan-area estimates should not
+be added together because their geographic boundaries
+overlap.
+
+### Question 7: Does More Housing Always Mean More People?
+
+The scatterplot compares PLUTO residential unit counts with Census population estimates. Each point represents a census tract. Vacancies, household size and group quarters can help explain why tracts with similar numbers of units may have different populations.
+
+```{r}
+#| label: task6-q7
+#| message: false
+#| warning: false
+
+housing_relationship <- tract_analysis |>
+  filter(
+    total_population > 0,
+    residential_units > 0
+  )
+
+ggplot(
+  housing_relationship,
+  aes(
+    x = residential_units,
+    y = total_population
+  )
+) +
+  geom_point(
+    color = "#174A8B",
+    alpha = 0.35,
+    size = 1.5
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    color = "#B22222"
+  ) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Does More Housing Mean More Residents?",
+    subtitle = "Residential units and population across NYC census tracts",
+    x = "Residential units",
+    y = "Estimated population",
+    caption = "Sources: ACS 2024 and NYC PLUTO"
+  ) +
+  theme_minimal(base_size = 11)
+
+housing_correlation <- cor(
+  housing_relationship$residential_units,
+  housing_relationship$total_population,
+  use = "complete.obs"
+)
+```
+
+The correlation between residential units and population
+is **`r round(housing_correlation, 3)`**.
+
+Tracts with more housing units generally had more residents. The spread around the fitted line shows how much population can vary among tracts with similar unit counts.
+
+### Question 8: Where Does PLUTO Report the Highest Floor Counts?
+
+I ranked neighborhoods by the highest floor count recorded for a property in each NTA.
+
+```{r}
+#| label: task6-q8
+#| message: false
+#| warning: false
+
+nta_building_heights <- pluto_eda |>
+  filter(
+    !is.na(tract_geoid),
+    !is.na(numfloors),
+    numfloors > 0
+  ) |>
+  left_join(
+    tract_nta_crosswalk |>
+      select(GEOID, nta2020, ntaname, boroname),
+    by = c("tract_geoid" = "GEOID")
+  ) |>
+  filter(!is.na(nta2020)) |>
+  group_by(nta2020, ntaname, boroname) |>
+  summarise(
+    tallest_building_floors = max(numfloors),
+    .groups = "drop"
+  ) |>
+  arrange(desc(tallest_building_floors))
+
+nta_building_heights |>
+  slice_head(n = 10) |>
+  kable(
+    col.names = c(
+      "NTA Code",
+      "Neighborhood",
+      "Borough",
+      "Maximum Floors"
+    ),
+    caption = "NYC Neighborhoods With the Tallest Recorded Buildings"
+  )
+```
+
+The largest reported value is **`r nta_building_heights$tallest_building_floors[1]` floors** in **`r nta_building_heights$ntaname[1]`**. That figure is an outlier. The property record needs verification before the building can be described as the city’s tallest.
+
+### Question 9: Mapping Population Density Across New York City
+
+The map shows estimated residents per square mile of census tract area. The legend gives the density represented by each color.
+
+```{r}
+#| label: task6-q9
+#| message: false
+#| warning: false
+
+nyc_tracts_projected <- sf::st_transform(nyc_tracts, 2263)
+
+nyc_density <- nyc_tracts_projected |>
+  mutate(
+    area_sq_miles =
+      as.numeric(sf::st_area(nyc_tracts_projected)) / 27878400,
+    population_density = if_else(
+      area_sq_miles > 0,
+      total_population / area_sq_miles,
+      NA_real_
+    )
+  )
+
+ggplot(nyc_density) +
+  geom_sf(
+    aes(fill = population_density),
+    color = NA
+  ) +
+  scale_fill_gradientn(
+    colors = c("#FFFFFF", "#F7D117", "#174A8B", "#CE1126"),
+    transform = "sqrt",
+    labels = scales::comma,
+    na.value = "grey90"
+  ) +
+  labs(
+    title = "Where New Yorkers Live Closest Together",
+    subtitle = "Estimated residents per square mile by census tract",
+    fill = "Residents\nper sq. mile",
+    caption = "Source: 2020–2024 ACS five-year estimates and Census tract boundaries"
+  ) +
+  theme_void(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+```
+
+The map uses colors inspired by the Philippine flag,
+connecting the visual presentation to the Filipino
+American focus of this project. The legend shows which
+colors correspond to higher population densities.
+
+### Question 10: How Many New Yorkers Live in Primarily Commercial Areas?
+
+A census tract qualifies as primarily commercial in this analysis when commercial space accounts for more than half of its combined commercial and residential floor area.
+
+```{r}
+#| label: task6-q10
+#| message: false
+#| warning: false
+
+commercial_tracts <- tract_analysis |>
+  mutate(
+    commercial_sqft = coalesce(commercial_sqft, 0),
+    residential_sqft = coalesce(residential_sqft, 0),
+    combined_sqft = commercial_sqft + residential_sqft,
+    commercial_share = if_else(
+      combined_sqft > 0,
+      commercial_sqft / combined_sqft,
+      NA_real_
+    ),
+    primarily_commercial =
+      !is.na(commercial_share) & commercial_share > 0.5
+  )
+
+commercial_summary <- commercial_tracts |>
+  summarise(
+    commercial_tract_count = sum(primarily_commercial),
+    residents_in_commercial_tracts = sum(
+      total_population[primarily_commercial],
+      na.rm = TRUE
+    ),
+    total_residents = sum(total_population, na.rm = TRUE)
+  ) |>
+  mutate(
+    resident_percentage = if_else(
+      total_residents > 0,
+      100 * residents_in_commercial_tracts / total_residents,
+      NA_real_
+    )
+  )
+
+commercial_summary |>
+  mutate(
+    residents_in_commercial_tracts =
+      scales::comma(residents_in_commercial_tracts),
+    total_residents = scales::comma(total_residents),
+    resident_percentage = round(resident_percentage, 2)
+  ) |>
+  knitr::kable(
+    col.names = c(
+      "Primarily Commercial Tracts",
+      "Estimated Residents in Those Tracts",
+      "Estimated Residents in All Analyzed Tracts",
+      "Share of Analyzed Residents (%)"
+    ),
+    caption = "Population Living in Primarily Commercial Census Tracts"
+  )
+```
+
+Under this definition, approximately
+**`r comma(commercial_summary$residents_in_commercial_tracts)` New Yorkers**
+live in primarily commercial census tracts.
+
+This represents about
+**`r round(commercial_summary$resident_percentage, 2)`%**
+of the population represented in the tract dataset.
+
+
+
+### Key Findings
+
+- Among U.S. metropolitan areas outside the New York metro area, **`r top_five_metros$name[1]`** had the highest estimated Filipino share of its local population, at **`r round(top_five_metros$filipino_percentage[1], 2)`%**.
+- About **`r round(ny_share, 2)`%** of the nationwide Filipino population lived in New York State.
+
+
+
+```{r}
+tidycensus::get_acs(
+  geography = "tract",
+  state = "NY",
+  county = "Kings",
+  variables = c(
+    total_population = "B01003_001",
+    group_quarters = "B26001_001"
+  ),
+  year = 2024,
+  survey = "acs5",
+  output = "wide"
+) |>
+  dplyr::filter(GEOID == "36047001801") |>
+  dplyr::transmute(
+    GEOID,
+    total_population = total_populationE,
+    group_quarters_population = group_quartersE,
+    household_population = total_populationE - group_quartersE
+  ) |>
+  knitr::kable()
+
+```
+
+## Task 7: Atlas of American Communities Entry
+
+### From Little Manila to the Pacific
+
+Under the elevated 7 train in Woodside, Queens, Roosevelt Avenue carries a second name: Little Manila. This area marks a community that took shape as Filipino nurses and their families made homes near the hospitals where they worked. In the 1970s, facing a nursing shortage, New York hospitals recruited from the Philippines. Some of the nurses who worked at Elmhurst Hospital settled nearby, including in Woodside. The street name makes that history visible on an ordinary trip through Queens. [New York City Council, Little Manila Avenue co-naming record](https://legistar.council.nyc.gov/View.ashx?GUID=1FD967D7-D6E1-4EF9-A9F0-A06F917D928B&ID=11567044&M=F)
+
+For me, as someone born in the Philippines, Little Manila is a way into a larger question. What does a community look like beyond the street that bears its name? The neighborhood map below shows the estimated share of residents who identified as Filipino, alone or in combination, across New York City. Woodside and neighboring Elmhurst put the story in western Queens, while the citywide view lets readers follow the pattern beyond those two neighborhoods. The neighborhood estimates are approximate because this project assigns census tracts to Neighborhood Tabulation Areas by largest overlap.
+
+```{r}
+#| label: fig-task7-nyc
+#| fig-cap: "Estimated number of Filipino residents by New York City Neighborhood Tabulation Area."
+#| fig-alt: "Map of New York City neighborhoods shaded by estimated number of Filipino residents."
+#| fig-width: 8
+#| fig-height: 7
+
+ggplot2::ggplot(nta_filipino) +
+  ggplot2::geom_sf(
+    ggplot2::aes(fill = filipino_population),
+    color = "white",
+    linewidth = 0.12
+  ) +
+  ggplot2::scale_fill_gradient(
+    low = "#fff4cd",
+    high = "#174a8b",
+    labels = scales::label_comma(),
+    na.value = "grey85"
+  ) +
+  ggplot2::labs(
+    title = "Where Filipino New Yorkers Live",
+    fill = "Estimated\nFilipino residents",
+    caption = "Source: 2020–2024 ACS five-year estimates and NYC neighborhood boundaries"
+  ) +
+  ggplot2::theme_void() +
+  ggplot2::theme(plot.title = ggplot2::element_text(face = "bold"))
+```
+
+The migration route to Queen,NY began with a King of Spain named Philip. Hence, the word Philippines came to be. After **1898** Spanish-American War, Spain ceded the Philippines to the US under the Treaty of Paris. Under American rule, Filipinos were U.S. nationals without U.S. citizenship and COULD ENTER THE US without the immigration restrictions. That status helped open an early wave of large-scale migration. Congress sharply restricted Filipino immigration in **1934**, and the Philippines became independent in **1946**. [U.S. Department of State](https://history.state.gov/milestones/1899-1913/war) · [National Park Service](https://home.nps.gov/people/philip-vera-cruz.htm) · [Library of Congress](https://guides.loc.gov/aapi-mss/philippine)
+
+Hawaii and California became early centers of Filipino settlement. Beginning in **1906**, recruiters brought Filipino laborers to Hawaii’s sugar plantations. In California, farm work drew migrants to the Central Valley. Between jobs, workers could go to Stockton’s Little Manila for familiar food and the company of people who spoke their languages. Decades later, the Immigration and Nationality Act of **1965** ended the national-origins quota system. New York’s hospital recruitment in the following decade brought another generation of Filipinos to a different kind of workplace. In Woodside, a neighborhood grew around the lives they built after their shifts ended. [National Park Service, immigration history](https://www.nps.gov/articles/upload/04-Essay-4-immigration.pdf) · [Library of Congress, Immigration and Migration](https://www.loc.gov/collections/songs-of-america/articles-and-essays/historical-topics/immigration-and-migration/) · [New York City Council](https://legistar.council.nyc.gov/View.ashx?GUID=1FD967D7-D6E1-4EF9-A9F0-A06F917D928B&ID=11567044&M=F)
+
+```{r}
+#| label: fig-task7-us
+#| fig-cap: "Estimated Filipino population by state and the District of Columbia."
+#| fig-alt: "U.S. map shaded by estimated Filipino population, with insets for Alaska and Hawaii."
+#| fig-width: 9
+#| fig-height: 6
+#| message: false
+
+atlas_state_population <- tidycensus::get_acs(
+  geography = "state",
+  variables = "B02018_012",
+  year = 2024,
+  survey = "acs5"
+) |>
+  dplyr::transmute(GEOID, filipino_population = estimate)
+
+atlas_us_states <- tigris::states(cb = TRUE, resolution = "20m", year = 2024) |>
+  dplyr::filter(STUSPS %in% c(state.abb, "DC")) |>
+  dplyr::left_join(atlas_state_population, by = "GEOID") |>
+  tigris::shift_geometry()
+
+ggplot2::ggplot(atlas_us_states) +
+  ggplot2::geom_sf(
+    ggplot2::aes(fill = filipino_population),
+    color = "white",
+    linewidth = 0.22
+  ) +
+  ggplot2::scale_fill_gradient(
+    low = "#fff4cd",
+    high = "#174a8b",
+    trans = "sqrt",
+    labels = scales::label_comma(),
+    na.value = "grey85"
+  ) +
+  ggplot2::labs(
+    title = "Filipino communities across the United States",
+    fill = "Estimated\nresidents",
+    caption = "Source: 2020–2024 ACS five-year estimates and Census state boundaries"
+  ) +
+  ggplot2::theme_void() +
+  ggplot2::theme(plot.title = ggplot2::element_text(face = "bold"))
+```
+
+The 2020–2024 American Community Survey estimates that **4.59 million** U.S. residents identified as Filipino, alone or in combination. The Los Angeles–Long Beach–Anaheim metro had about **540,000** Filipino residents, the largest count in the project’s metro comparison. San Francisco–Oakland–Fremont had about **321,000**, and New York–Newark–Jersey City had about **262,000**. The New York metro figure includes communities beyond the five boroughs.
+
+Native Hawaiians are Polynesian, and Hawaiian and many Philippine languages share deeper roots in the Austronesian language family. That linguistic connection reaches back much further than the migration described here. The Filipino communities mapped in this entry grew through generations of migration and settlement. [Austronesian Linguistics](https://academic.oup.com/reference/62381/reference-article-abstract/555014119?login=false) · [National Park Service](https://www.nps.gov/articles/asian-americans-and-pacific-islanders-in-the-making-of-the-nation.htm)
+
+Today, that history shows up in the numbers. In the 2020–2024 ACS, about **49,600** residents of the Kahului–Wailuku metro identified as Filipino, alone or in combination, making up **30.12 percent** of the population, the highest share among the metros in this analysis. Urban Honolulu had a larger Filipino community of roughly **253,000**, or **25.23 percent** of its population. A journey that began with a job on a plantation became, for generations of families, a life in Hawaiʻi. [U.S. Census Bureau, ACS table B02018](https://api.census.gov/data/2024/acs/acs5/groups/B02018.html)
+
+From Hawaiʻi’s sugar plantations to California’s farm towns and New York’s hospitals, Filipino migrants helped shape the places where they settled. They carried a seafaring heritage that long predates Spanish rule, alongside traditions of faith and celebration shaped by centuries of contact with Spain. To me, the Filipino greeting *mabuhay* and the Hawaiian greeting *aloha* echo a warmth that becomes tangible when neighbors help one another through hard times. That spirit is part of what Filipino communities have given the United States, from the Pacific to Roosevelt Avenue.
+
+
+## AI Usage Statement
+
+::: {.callout-note title="AI Usage Disclosure"}
+I used Gemini to help debug my R and Quarto code, check Census variables, investigate unusual results, and revise the writing and maps. I ran the analysis in RStudio, reviewed the rendered tables and maps, and made the final decisions about what to include and how to interpret the results.
+:::
+
+
 
